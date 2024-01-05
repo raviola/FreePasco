@@ -1,0 +1,1144 @@
+<!doctype linuxdoc system>
+
+<article>
+
+<title>SW500i Programming Howto
+
+<author>Andrew Smith
+
+<date>June 2005, v2.00
+
+<toc>
+
+<sect> Introduction
+
+<sect1> History
+<p>
+Skip this if you don't like fairy tales.
+<p>
+Once upon a time, in a cold country way up north the board of education decided to buy a load of fancy equipment for highschool students to use in their labs.
+They look like this <url url="pasco.jpg"> and are good for measuring temperature, speed, pH, etc. Models SW500i. From now on I will call them lbbs (little black boxes).
+<p>
+Soon enough teachers knew they would never use those things.
+I'll tell you why: the lbbs were capable of doing amazing things and the software was appropriately complex.
+What PASCO Scientific didn't think of was that people in a high school (students and teachers alike) had no time or desire to do rocket science.
+<p>
+PASCO wouldn't even consider rewriting their software, instead they suggested buying the newer, even fancier boxes. The techers didn't think that was funny.
+The entire project proved to be a failure.
+<p>
+So one day some teacher (John Selmys) asked some student (me) whether he wants to write a linux library in C for enabling communication with an lbb.
+Later on applications would be written to use that library.
+The student said ok and started the work.
+<p>
+In the meantime PASCO Scientific kindly gave us a copy of basic documentation for that model of lbb. Vary basic, but enough to write the access library.
+<p>
+Of did I forget to mention John and me are both big linux fans? Naturally all the work would be done in and for linux.
+Cross-platform compatibility came to mind a few times but I decided against it.
+Microsoft devtools refuse to compile any of my C/C++ assignments and I don't really care to find out why.
+
+<sect1> Intended Audience
+<p>
+This document was written for people interested in creating applications for the SW500i using the sw500-l1 library.
+It has walkthrough of lbb's operation from power up to something usefull, a reference section describing the usage of all functions and explanations for whatever i can explain.
+<p>
+At the time of writing most capabilities of the lbb have been accounted for in the library.
+The two or three left out are used for data logging away from the lab (the lbb is portable).
+<p>
+I don't work for PASCO. I am not a programing/EE guru. Many things I don't understand. However, this documents is the best you'll get to guide you with the lbb.
+
+<sect1> Contact Information
+<p>
+If you have suggestions for improving this document or find mistakes, please let me know. My current email address is andrew at littlesvr ca.
+
+<sect> Installation
+
+<sect1> Extract
+<p>
+Extract the archive you downloaded:
+<p>
+tar -xvjf libsw500-l1-0.9-src.tar.bz
+<p>
+cd libsw500-l1-0.9/src
+
+<sect1> Configure / Compile
+<p>
+Open the Makefile with your favourite text editor.
+You may want to change the install prefix or the serial port or both.
+The files will go in PREFIX/lib and PREFIX/include.
+The serial port /dev/ttyS0 is COM1 under dos and /dev/ttyS1 is COM2.
+<p>
+After you finished editing the makefile type make. You better hope it compiles.
+
+<sect1> Install
+<p>
+If the above step showed no error:
+<p>
+su<newline>
+'root password'
+<p>
+Do ls -l /dev/ttyS0 (or S1 if you changed it) and see whether users have read/write permission.
+If not, chmod 666 /dev/ttyS0
+<p>
+This is necessary to allow regular users to use the lbb (they need permission to write to and read from the port it's connected to). /dev/ttyS0 might be a link to something like /dev/tts/0, the chmod above should work anyway.
+<p>
+Last step, type
+<p>
+make install
+<p>
+If you still got no errors, it should be good for use.
+
+<sect1> Troubleshooting
+<sect2> make: command not found
+<p>
+I really have seen linux systems without make.
+In SuSE it's in the developement tools section.
+
+<sect> Example
+
+We'll be writing a program to get a temperature reading.
+By the time you get to the end you will probably start wondering whether a thermometer is cheaper :)
+If you don't have a temperature probe, use a ph probe. I think any simple analogue probe will work.
+
+<sect1> Return Codes
+<p>
+All the functions in libsw500-l1 will return a value greater then (not equal to) zero if they are successfull and zero or negative otherwise.
+Do yourself a favour and check the return value of every function you call.
+
+<sect1> Serial Port Setup
+<p>
+There are only two functions dealing with the serial port: initSerial() and unInitSerial().
+<p>
+initSerial() will return an int, openPort.
+This variable will be used by all other functions, it's a reference (of sorts) to the socket used for communicating with the lbb.
+No function except unInitSerial() will change that variable.
+<p>
+unInitSerial() is called at the end of your program.
+It's probably not necessary but you should get into the habit of using it just in case your application gets advanced enough.
+<p>
+<tscreen><code>
+int openPort;
+
+openPort = initSerial();
+
+if(openPort > 0)
+{
+    printf("connection to serial port established\n");
+}
+</code></tscreen>
+
+<sect1> ROM->RAM Mode
+<p>
+When the lbb is turned on, it is in a state called ROM mode.
+It has executed the little code burned into a chip inside.
+At this point, it is only capable of doing two things: download and execute some code that will enable all it's usefull functions.
+<p>
+<tscreen><code>
+// make sure the lbb is in ROM Mode (in case you didn't actually turn it off and back on)
+if( identify(openPort) == 1 )
+{
+    if( initialize(openPort) > 0 )
+    {
+        if( execute(openPort) > 0 )
+        {
+            // now the lbb should be in RAM mode, check just in case
+            if( identify(openPort) == 2 )
+            {
+                printf("Now in RAM mode\n");
+            }
+        }
+    }
+}
+</code></tscreen>
+<p>
+Note that you will always use initialize() and execute() together like that.
+Actually this entire block of code could be one function, feel free to make one.
+<p>
+The initialize() function takes several seconds to complete, that is normal and has nothing to do with the speed of your serial port or the cable. That's just the way it works.
+<p>
+In case turning the lbb off and back on is unacceptable, use the reset(int openPort) function.
+It will take the lbb from whatever state it's in back to the virgin ROM mode.
+An advanced note: stuff may still be in your serial port buffer even though the lbb has been reset, you have to make sure you clear that.
+
+<sect1> Preparing for data collection
+<p>
+Before you can start collecting information from your temperaure probe you must set up the lbb.
+For example, it must be told which port the probe is plugged into.
+
+<sect2> Input Select
+<p>
+This function tells the lbb which channel(s) to give you readings from.
+Analog channels A,B,C and digital channels 1 and 2 are available.
+Keep in mind that analog channels A and B have an optional 'with gain' mode which I guess is good for some probes.
+<p>
+Besides the openPort, inputSelect() takes an array of 10 bytes (char channels[10]).
+The first five bytes are for analog channels. We want to select channel A without gain, that's the first byte.
+
+<tscreen><code>
+// declare an array of 10 bytes
+char input[10];
+
+// set all elements to zero
+bzero(input, 10);
+
+// select channel A without gain
+input[0] = 1;
+inputSelect(openPort, input);
+</code></tscreen>
+
+<sect2> Rate Select
+<p>
+This function tells the lbb how many times per second to do/send a reading.
+The parameters to this function are somewhat complicated, refer to Appendix A for an explanation.
+<tscreen><code>
+// 50 microseconds
+unsigned long samplePeriod = 50;
+// times samplePeriods
+unsigned long clockPeriod = 1;
+// not sure
+unsigned short pingPeriod = 1;
+// use large buffer
+char smallBuffer = 0;
+
+rateSelect(openPort, samplePeriod, clockPeriod, pingPeriod, smallBuffer);
+</code></tscreen>
+
+<sect1> Start Sending Records
+<p>Let's tell the lbb to start sending records at the rate we specified.
+<tscreen><code>
+startSampling(openPort);
+</code></tscreen>
+
+<sect1> Reading Records
+<p>
+Now that the lbb is sending records we have to read them in a hurry before some buffer overflows and messes everything up:
+<p>
+When reading a record from the lbb (in one of several ways) you must first read the record type, use readRecordType() for that.
+In our case you will find that we get a clocked sample record.
+<p>
+A clocked sample record is followed by readings for each selected channel (remember inputSelect()?).
+To get that/those readings use readRecordCS().
+<p>
+It is very important that you remember which channels you selected and tell readRecordCS() about them properly.
+If you select one channel but try to get readings from two, it might work but you will get your reading so messed up you'll have to reset (or at least restart sampling) to get out of the mess.
+<p>
+Here's an illustration of what a record looks like:
+<tscreen><verb>
+T - record type
+A - channel A reading
+B - channel B reading
+
+TAABB
+</verb></tscreen>
+<p>
+Can you see the potential problem yet? This is what two records look like:
+<tscreen><verb>
+TAABBTAABB
+</verb></tscreen>
+<p>
+They are not delimited in any way so if you try to read a 'clocked sample' record with 3 channel readings, you will get 'TAABBTA' which has an unpredictable value and you will not be able to restore order until you restart sampling.
+<p>
+To ease dealing with this, readRecordCS() takes as a parameter the same array that inputSelect() used.
+This may cause problems if you're not carefull, so just give it some thought.
+<p>
+We only have channel A selected so our code would look like this:
+<tscreen><code>
+short analog[3]; // analog readings
+unsigned short digital[2]; //digital readings
+
+rc = readRecordType(openPort);
+        
+// read forever
+for(i = 0; 1; i++)
+{
+    // record type one is a 'clocked sample' record
+    if( readRecordType(openPort) == 1 )
+    {
+        if( readRecordCS(openPort, input, analog, digital) > 0 )
+        {
+            printf("channel A reading: %d\n", analog[0]);
+        }
+    }
+}
+</code></tscreen>
+<p>
+Now that reading is not very obvious. One can hardly imagine the temperature in his room is in between -12.5 and +12.5 degrees.
+It's not but converting raw signals such as those we just read into comprehensible values (degrees, meters) is a different science for each kind of probe and I have no documentation for that. Sorry.
+
+<sect1> Sample conversion
+<p>
+Unfortunately you will not get exactly what you want from the lbb and what exactly it sends you is different for every probe.
+Readings are also slightly different when made with or without gain and from different ports.
+Look in the Pasco docs for a couple of confusing tips.
+<p>
+For temperature, port A without gain we have to do this:
+<tscreen><code>
+analog[0] = (analog[0] * 100) / 3276.7;
+</code></tscreen>
+<sect1> Full code
+<p>
+<tscreen><code>
+// main.c
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sw500-l1.h>
+
+int main(void)
+{
+    int rc; // return code from various functions
+    int openPort; // reference to serial port
+    char input[10]; // for inputSelect()
+    unsigned long samplePeriod; // for rateSelect()
+    unsigned long clockPeriod; // for rateSelect()
+    unsigned short pingPeriod; // for rateSelect()
+    char smallBuffer; // for rateSelect()
+    short analog[3]; // analog readings
+    unsigned short digital[2]; //digital readings
+    int count; //counter
+    
+    openPort = initSerial();
+    
+    if(openPort > 0)
+    {
+        printf("connection to serial port established\n");
+    }
+    else
+        return 1;
+    
+    // just in case
+    reset(openPort);
+    
+    printf("Initializing... "); fflush(stdout);
+    // make sure the lbb is in ROM Mode (in case you didn't actually turn it off and back on)
+    if( identify(openPort) == 1 )
+    {
+        if( initialize(openPort) > 0 )
+        {
+            if( execute(openPort) > 0 )
+            {
+                // now the lbb should be in RAM mode, check just in case
+                if( identify(openPort) == 2 )
+                {
+                    printf("now in RAM mode\n");
+                }
+                else
+                    return 1;
+            }
+            else
+                return 1;
+        }
+        else
+            return 1;
+    }
+    else
+        return 1;
+    
+    // set all elements to zero
+    bzero(input, 10);
+    
+    // select channel A without gain
+    input[0] = 1;
+    inputSelect(openPort, input);
+    
+    // 50 microseconds
+    samplePeriod = 50;
+    // times samplePeriods
+    clockPeriod = 1;
+    // not sure
+    pingPeriod = 1;
+    // use large buffer
+    smallBuffer = 0;
+    
+    rc = rateSelect(openPort, samplePeriod, clockPeriod, pingPeriod, smallBuffer);
+    if(rc <= 0)
+        return 1;
+    
+    // read forever
+    for(count = 0; 1; count++)
+    {
+        oneShotSample(openPort);
+        
+        rc = readRecordType(openPort);
+        
+        // record type one is a 'clocked sample' record
+        if(rc == 1)
+        {
+            if( readRecordCS(openPort, input, analog, digital) > 0 )
+            {
+                analog[0] = (analog[0] * 100) / 3276.7;
+                printf("temperature: %d\n", analog[0]);
+            }
+            else 
+                return 1;
+        }
+        // some error
+        else if (rc <= 0)
+            return 1;
+        // different record type
+        else
+        {
+            printf("weird. got the wrong record type\n");
+            return 1;
+        }
+    }
+    
+    return 0;
+}
+</code></tscreen>
+<p>
+Make sure the library is installed, then compile like this (change path to the library if needed): cc main.c /usr/lib/libsw500-l1.a
+<p>
+I tested this code, it works.
+
+<sect> Function Reference
+<p>
+This section has detailed explanations about what the libsw500-l functions recieve and return.
+<p>
+Quotes are copied from the source code.
+
+<sect1> Serial Port Setup
+
+<sect2> initSerial()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* initSerial()
+* -opens the serial port and initializes it for use by the lbb library
+*
+* Recieves:
+* - void
+*
+* Returns:
+* - sd, open port
+* - -1 if failed something
+*
+* Bugs:
+* - */
+int initSerial(void);
+</code></tscreen>
+initSerial() returns an int that's passed to every other function in the library (I chose to always call it openPort).
+
+<sect2> unInitSerial()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* unInitSerial()
+* -restores serial port settings and closes the socket
+*
+* Recieves:
+* - sd, open port
+*
+* Returns:
+* - 1 if closed ok
+* - -1 if sd recieved was invalid
+* - -2 if failed to close
+*
+* Bugs:
+* - */
+int unInitSerial(int openPort);
+</code></tscreen>
+Used after you are finished with the lbb.
+
+<sect1> Initialization
+
+<sect2> identify()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* identify()
+* -sends the 'Identify' command to the lbb and reads the return
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - -1 if the return was wrong
+* - 0 if communication error
+* - 1 if in ROM mode
+* - 2 if in RAM mode
+*
+* Notes:
+* -'returnCode' is used to check there were no previous errors
+*
+* To do:
+* -
+*
+* Bugs:
+*  -sometimes the lbb does not return the version code...
+*   apparently this is fixed now that input is read one byte at a time */
+int identify(int openPort);
+</code></tscreen>
+
+<sect2> initialize()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* initialize()
+* -a.k.a. download record
+* -sends x 'Download' commands to the lbb and reads the return
+*
+* Notes:
+* -this function is complicated, look for flow chart
+* -file io not checked (except open()), contents assumed good
+* -file must have at least one non-S2 line at the end
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - 1, successfull
+* - 0, communication error
+* - -1, file open error, line size error
+* - -2, checksum error
+*
+* To do:
+* - */
+</code></tscreen>
+This function is the most complicated in the library but one of the easiest to use :)
+It's either successfull or not.
+
+<sect2> execute()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* execute()
+* -sends the 'Execute' command to the lbb
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - -2 if return code wrong
+* - -1 if comm error
+* - 0 if lbb returned nothing (powered off or no code to execute)
+* - 1 if lbb returned proper acknoledgement */
+int execute(int openPort);
+</code></tscreen>
+<p>
+This function is only to be used after a successfull initialize()
+
+<sect2> reset()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* reset()
+* -works in ram mode to reset the lbb to rom mode
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - 0 if failed to send command
+* - 1 otherwise
+*
+* To do:
+* -
+*
+* Bugs:
+* -after sending the reset command, the lbb waits for about a second before
+*  replying to any other command
+*  -put a sleep() at the end to fix this */
+int reset(int openPort);
+</code></tscreen>
+<p>
+Don't worry about that sleep() bug.
+As long as you only have one process communicating with the lbb, it will work well.
+<p>
+If you have more then one, you have to make sure to not send any commands until reset() finished.
+
+<sect1> Sampling Setup
+
+<sect2> inputSelect()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* inputSelect()
+* -sends command to select the input channel(s)
+*
+* How it works:
+* -sends command followed by 2 operand bytes (hex values are for whole byte):
+*  -byte1:
+*   bit0 (0x01) - analog ch A (a)
+*   bit1 (0x02) - analog ch A with gain 10X (A)
+*   bit2 (0x04) - analog ch B (b)
+*   bit3 (0x08) - analog ch B with gain 10X (B)
+*   bit4 (0x10) - analog ch C (c)
+*   bit5-7 - unused
+*  -byte2:
+*   bit0 - unused
+*   bit1 - unused
+*   bit2 (0x04) - digital ch 1 events
+*   bit3 (0x08) - digital ch 2 events
+*   bit4 (0x10) - digital ch 1 counts
+*   bit5 (0x20) - digital ch 2 counts
+*   bit6 - unused
+*   bit7 (0x80) - motion timer flag
+*
+* Recieves:
+* - an open() type pointer to the serial port
+* - char* list of channels to select, 
+*   10-byte array each element 1(yes) or 0(no):
+*   channels[0] for analog channel A
+*   channels[1] for analog channel A with gain 10x
+*   channels[2] for analog channel B
+*   channels[3] for analog channel B with gain 10x
+*   channels[4] for analog channel C
+*   channels[5] for digital channel 1 events
+*   channels[6] for digital channel 2 events
+*   channels[7] for digital channel 1 counts
+*   channels[8] for digital channel 2 counts
+*   channels[9] for motion timer flag
+*
+* Returns:
+* - 1 if successfull
+* - 0 if not
+*
+* To do:
+* -
+*
+* Bugs:
+* - */
+int inputSelect(int openPort, char channels[10]);
+</code></tscreen>
+<p>
+Receives an array of 10 bytes.
+You must set the elements of the array yourself.
+
+<sect2> rateSelect()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* rateSelect()
+* -sends command to select the sampling rate
+*
+* How it works:
+* -sends command followed by 4 operands:
+*  -op1: 4 bytes (unsigned long)
+*   sample period
+*  -op2: 4 bytes (unsigned long)
+*   clock period
+*  -op3: 2 bytes (unsigned short)
+*   ping period
+*  -op4: 1 byte
+*   small buffer flag
+*
+* Recieves:
+* - an open() type pointer to the serial port
+* - unsigned long, sample period (microseconds)
+* - unsigned long, clock period (sample periods)
+* - unsigned short, ping period (100 microsecond ticks)
+* - char, small buffer flag (1=small, 0=large)
+*
+* Returns:
+* - 1, all writes successfull
+* - 0, a write failed */
+int rateSelect(int openPort, unsigned long samplePeriodIn, 
+               unsigned long clockPeriodIn, unsigned short pingPeriodIn, 
+               char smallBufferIn);
+</code></tscreen>
+<p>
+SAMPLE PERIOD
+<p>
+When digital events, counting, or motion sensing are selected, the sample period must be set to 100 microseconds.
+<p>
+When no digital events, counting, or motion sensing are selected,the sample period is set to the period for analog sampling.
+<p>
+Minimum is 50 microseconds for each analog channel and 20 microseconds for one or both digital channels.
+<p>
+CLOCK PERIOD
+<p>
+Control how often analog samples and digital counters are sampled (in sample periods).
+<p>
+If analog channels only are selected, it should be 1.
+<p>
+If the clock period is 0 then no periodic samples are generated (digital timing or motion sensing only).
+<p>
+PING PERIOD
+<p>
+Is not documented, I don't know what it does.
+The only place it's mentioned sais it's an unsigned short, 100 microsecond ticks.
+<p>
+SMALL BUFFER FLAG
+<p>
+Zero unless you need high-speed sampling.
+
+<sect2> triggerSelect()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* triggerSelect()
+* -sends the 'Trigger Select' command
+*
+* How it works:
+* -sends command followed by 3 operands:
+*  -op1 (unsigned byte), channel (read trigger on ..):
+*   1 - first selected analog channel
+*   2 - second selected analog channel
+*   3 - third selected analog channel
+*   4 - digital channel 1
+*   5 - digital channel 2
+*  -op2 (unsigned byte), slope (read trigger on ..):
+*   0 - falling analog signal or low digital state
+*   1 - rising analog signal or high digital state
+*  -op3 (signed short, 2 bytes), level:
+*   don't understand this one, (10*32767)/10 seems to make sense
+*
+* Recieves:
+* - an open() type pointer to the serial port
+* - unsigned char, channel
+* - int, slope
+* - int, level
+*
+* Returns:
+* - 1 if everything ok
+* - 0 if communication falure
+* */
+int triggerSelect(int openPort, unsigned char channel, unsigned char slope,
+                                                            signed short level);
+</code></tscreen>
+<p>
+All I understand of this function is there.
+Look in appendix A for official description.
+
+<sect2> rotaryMotRes()
+<p>
+Stands for rotary motion resolution.
+<p>
+<tscreen><code>
+/*******************************************************************************
+* rotaryMotRes()
+* -sends the 'Rotary Motion Resolution' command
+*
+* Recieves:
+* - an open() type pointer to the serial port
+* - char, 1 or 2
+*
+* Returns:
+* - 1 if everything ok
+* - 0 if communication falure
+* */
+int rotaryMotRes(int openPort, char numPulses);
+</code></tscreen>
+<p>
+If numPulses is 1, setting is low resolution (360 counts per rotation).
+<p>
+If numPulses is 2, setting is high resolution (1440 counts per rotation).
+
+<sect2> logStateStore()
+<p>
+Not coded.
+
+<sect2> logStateRetrieve()
+<p>
+Not coded.
+
+<sect1> Sampling Control
+
+<sect2> startSampling()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* startSampling()
+* -sends the 'Start Sampling' command to the lbb
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error writing to port
+*
+* How it works:
+* -sends command, no operands
+*
+* Bugs:
+* - */
+int startSampling(int openPort);
+</code></tscreen>
+<p>
+Sends the signal to begin continuous sampling based on current settings.
+If the proper sampling setup commands were given, the lbb will return one sample record, followed by a stream of data.
+<p>
+startSampling() does not read the sample records, that would have made the function too complicated because it doesn't know which channels are selected.
+<p>
+You will have to make sure you read and validate the sample records.
+
+<sect2> stopSampling()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* stopSampling()
+* -sends the 'Stop Sampling' command to the lbb
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error writing to port
+*
+* Bugs:
+* -the command sent is echoed to stdout in ascii - fixed (function call
+*  had no parameters) */
+int stopSampling(int openPort);
+</code></tscreen>
+<p>
+Stops all sampling and digital pinging. Sampling options and buffer contents are preserved.
+<p>
+Note that sampling may stop automatically if the buffer becomes full.
+In such a case a sample state record will appear at the end of the data.
+
+<sect2> oneShotSample()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* oneShotSample()
+* -sends the 'OneShotSample' command to the lbb
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error writing to port
+*
+* Bugs:
+* - */
+</code></tscreen>
+Tells the lbb to send exactly one sample of the same kind you would get with startSampling().
+Not to be used after startSampling() was called.
+This one is good when you don't want to use startSampling() if, for example, you want to be absolutely sure you read for every sample the lbb sends.
+
+<sect2> checkBuffState()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* checkBuffState()
+* -sends the 'Check Buffer State' command to the lbb and reads return
+* -doesn't return the results from the lbb to the caller
+*
+* Recieves:
+* - an open() type pointer to the serial port
+* - pointer to unsigned short
+* - pointer to unsigned char
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error writing to port
+* - -2 if error reading expected return
+*  Via Parameters:
+*  - data bytes (0 if error)
+*  - logged data runs (0 if error)
+*
+* Bugs:
+* - */
+</code></tscreen>
+From official document:
+Get the number of data bytes and number of logged runs in the buffer.
+Data bytes may be left in the buffer after sampling has been stopped.
+They are not transferred to the host unless the host issues a Read Buffer command after stopping sampling.
+Multiple data runs are accumulated in the buffer by log commands issued by the user via the front panel button on the interface.
+
+<sect2> checkSampleState()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* checkSampleState()
+* -sends the 'Check Sample State' command to the lbb
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error writing to port
+*
+* Bugs:
+* - */</code></tscreen>
+From official document:
+Causes a sample state record to be inserted into the data stream.
+This command is useful for checking the interface state during prolonged waits for digital events, or very slow-clocked samples.
+
+<sect2> disableDataLogging()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* disableDataLogging()
+* -sends the 'Disable Data Logging' command to the lbb
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error writing to port
+*
+* Bugs:
+* - */</code></tscreen>
+From official document:
+Causes the interface to wake up from low-power sleep mode after data logging.
+The front-panel button is disabled.
+The Check Buffer State command can be used to determine if (and how much) log data is in the interface.
+The Read Buffer or Read Buffer Block command will cause the interface to transmit the buffer data.
+
+<sect2> enableDataLogging()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* enableDataLogging()
+* -sends the 'Enable Data Logging' command to the lbb
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error writing to port
+*
+* Bugs:
+* - */
+</code></tscreen>
+From official document:
+Causes the interface to enter low-power sleep mode in preparation for disconnection of power and data cables, and eventual data logging.
+In this mode, the front-panel button is enabled so that the user may start and stop data logging recording to create multiple data runs.
+Data transmission to the host is disabled.
+
+<sect2> pauseSampling()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* pauseSampling()
+* -sends the 'Pause Sampling' command to the lbb
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error writing to port
+*
+* Bugs:
+* - */
+</code></tscreen>
+From official document:
+Pauses all sampling and digital pinging.
+The buffer is cleared.
+A pause event record is added to the buffer.
+Has no effect if not started sampling.
+Clocked samples, event reporting, motion sensor pinging, and sample time accumulation are suspended.
+
+<sect2> readBuff()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* readBuff()
+* -sends the 'Read Buffer' command to the lbb
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error writing to port
+*
+* How it works:
+* -sends command, no operands
+* -recieves a sample data record
+*
+* Bugs:
+* - */
+</code></tscreen>
+Just don't confuse the lbb buffer with your serial port buffer.
+<p>
+From official document:
+Causes any data bytes in the buffer to be transmitted to the host and immediately cleared from the interface.
+Data bytes may remain in the interface buffer after a Stop Sampling command is issued.
+The Check Buffer State command reports how many data bytes are available.
+Data bytes will also be in the buffer when the interface has been used for logging away from the computer.
+In this later case, the Read Buffer Block command can provide a more reliable transfer of a large amount of logged data.
+
+<sect2> resetBuff()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* resetBuff()
+* -sends the 'Reset Buffer' command to the lbb
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error writing to port
+*
+* Bugs:
+* - */
+</code></tscreen>
+From official document:
+Sets the buffer to an empty state.
+
+<sect2> resumeSampling()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* resumeSampling()
+* -sends the 'Resume Sampling' command to the lbb
+*
+* Recieves:
+* - an open() type pointer to the serial port
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error writing to port
+*
+* Bugs:
+* - */
+</code></tscreen>
+From official document:
+Resumes sampling and digital pinging after a pause.
+Data is written to the buffer following the pause record.
+This command should only be used after sampling and pausing.
+
+<sect1> Reading Records
+<p>
+These functions are to be used to read a record the lbb sent.
+They do not ask for the record to be sent but assume it's coming.
+
+<sect2> readRecordType()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* readRecordType()
+* -reads a byte, type of record to follow
+*
+* Recieves:
+* - open() type pointer to the serial port
+*
+* Returns:
+* - -1 if error reading
+* - -2 if read bad record type
+* - 1 if clocked sample record
+* - 2 if digital event record
+* - 3 if pause record
+* - 4 if motion timer record
+* - 5 if sample state record
+* - 6 if trigger time offset record
+*
+* Bugs:
+* - 
+* Notes:
+* - understand what the 'd' int 0x2d is */
+</code></tscreen>
+This one you need to call before reading any record.
+It is separate from the record reading function so you may be able to easier deal with unexpected records.
+Just read the record type and call the appropriate readRecord function based on the return.
+
+<sect2> readRecordCS()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* readRecordCS()
+* -reads a 'clocked sample record' (0x1d)
+*
+* Recieves:
+* - open() type pointer to the serial port
+* - array of 10 bytes (same as inputSelect()) to tell which channels selected
+* - array of 3 short ints for analog readings (selected or not)
+* - array of 2 unsigned short ints for digital readings (selected or not)
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error reading expected return
+*  Via Parameters:
+*  - reading for each analog channel
+*  - reading for each digital channel
+*  * arrays zeroed in case of error
+*  * elements of arrays set to zero if particular channel not selected
+*
+* Bugs:
+* - 
+* Notes:
+* - understand what the 'd' int 0x1d is */
+</code></tscreen>
+Probably the most common type of record you will be dealing with.
+I use this for temperature and ph samples.
+
+<sect2> readRecordDE()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* readRecordDE()
+* -reads a 'digital event record' (0x2d)
+*
+* Recieves:
+* - open() type pointer to the serial port
+* - pointer to an unsigned int
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error reading expected return
+*  Via Parameters:
+*  - time of event
+*    0 if error
+*
+* Bugs:
+* - understand what the 'd' int 0x2d is
+* Notes:
+* -  */
+</code></tscreen>
+
+<sect2> readRecordMT()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* readRecordMT()
+* -reads a 'motion timer record' (0x50)
+*
+* Recieves:
+* - open() type pointer to the serial port
+* - pointer to an unsigned short int
+* - pointer to an unsigned int
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error reading expected return
+*  Via Parameters:
+*  - timerValue (0 if error)
+*  - timeOfEcho (0 if error)
+*
+* Bugs:
+* - 
+* Notes:
+* -  */
+</code></tscreen>
+This one I used for my distance sensor.
+
+<sect2> readRecordTTO()
+<p>
+<tscreen><code>
+/*******************************************************************************
+* readRecordTTO()
+* -reads a 'time stamp offset record' (0xF0)
+*
+* Recieves:
+* - open() type pointer to the serial port
+* - pointer to an unsigned int
+*
+* Returns:
+* - 1 if all seems ok
+* - -1 if error reading expected return
+*  Via Parameters:
+*  - timerStampOffset (0 if error)
+*
+* Bugs:
+* - 
+* Notes:
+* -  */
+</code></tscreen>
+
+<sect> Appendix A - Official Document
+<p>
+It's a word document and I can't easily change it because of the crappy formatting.
+<url url="SW500-SerialProtocol.doc">
+
+</article>

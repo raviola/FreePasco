@@ -1,0 +1,341 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<HTML>
+<HEAD>
+ <META NAME="GENERATOR" CONTENT="SGML-Tools 1.0.9">
+ <TITLE>SW500i Programming Howto: Example</TITLE>
+ <LINK HREF="SW500iProgrammingHowto-4.html" REL=next>
+ <LINK HREF="SW500iProgrammingHowto-2.html" REL=previous>
+ <LINK HREF="SW500iProgrammingHowto.html#toc3" REL=contents>
+</HEAD>
+<BODY>
+<A HREF="SW500iProgrammingHowto-4.html">Next</A>
+<A HREF="SW500iProgrammingHowto-2.html">Previous</A>
+<A HREF="SW500iProgrammingHowto.html#toc3">Contents</A>
+<HR>
+<H2><A NAME="s3">3. Example</A>We'll be writing a program to get a temperature reading.By the time you get to the end you will probably start wondering whether a thermometer is cheaper :)If you don't have a temperature probe, use a ph probe. I think any simple analogue probe will work.</H2>
+
+<H2><A NAME="ss3.1">3.1 Return Codes</A>
+</H2>
+
+<P>All the functions in libsw500-l1 will return a value greater then (not equal to) zero if they are successfull and zero or negative otherwise.
+Do yourself a favour and check the return value of every function you call.
+<P>
+<H2><A NAME="ss3.2">3.2 Serial Port Setup</A>
+</H2>
+
+<P>There are only two functions dealing with the serial port: initSerial() and unInitSerial().
+<P>initSerial() will return an int, openPort.
+This variable will be used by all other functions, it's a reference (of sorts) to the socket used for communicating with the lbb.
+No function except unInitSerial() will change that variable.
+<P>unInitSerial() is called at the end of your program.
+It's probably not necessary but you should get into the habit of using it just in case your application gets advanced enough.
+<P>
+<BLOCKQUOTE><CODE>
+<HR>
+<PRE>
+int openPort;
+
+openPort = initSerial();
+
+if(openPort > 0)
+{
+    printf("connection to serial port established\n");
+}
+</PRE>
+<HR>
+</CODE></BLOCKQUOTE>
+<P>
+<H2><A NAME="ss3.3">3.3 ROM->RAM Mode</A>
+</H2>
+
+<P>When the lbb is turned on, it is in a state called ROM mode.
+It has executed the little code burned into a chip inside.
+At this point, it is only capable of doing two things: download and execute some code that will enable all it's usefull functions.
+<P>
+<BLOCKQUOTE><CODE>
+<HR>
+<PRE>
+// make sure the lbb is in ROM Mode (in case you didn't actually turn it off and back on)
+if( identify(openPort) == 1 )
+{
+    if( initialize(openPort) > 0 )
+    {
+        if( execute(openPort) > 0 )
+        {
+            // now the lbb should be in RAM mode, check just in case
+            if( identify(openPort) == 2 )
+            {
+                printf("Now in RAM mode\n");
+            }
+        }
+    }
+}
+</PRE>
+<HR>
+</CODE></BLOCKQUOTE>
+<P>Note that you will always use initialize() and execute() together like that.
+Actually this entire block of code could be one function, feel free to make one.
+<P>The initialize() function takes several seconds to complete, that is normal and has nothing to do with the speed of your serial port or the cable. That's just the way it works.
+<P>In case turning the lbb off and back on is unacceptable, use the reset(int openPort) function.
+It will take the lbb from whatever state it's in back to the virgin ROM mode.
+An advanced note: stuff may still be in your serial port buffer even though the lbb has been reset, you have to make sure you clear that.
+<P>
+<H2><A NAME="ss3.4">3.4 Preparing for data collection</A>
+</H2>
+
+<P>Before you can start collecting information from your temperaure probe you must set up the lbb.
+For example, it must be told which port the probe is plugged into.
+<P>
+<H3>Input Select</H3>
+
+<P>This function tells the lbb which channel(s) to give you readings from.
+Analog channels A,B,C and digital channels 1 and 2 are available.
+Keep in mind that analog channels A and B have an optional 'with gain' mode which I guess is good for some probes.
+<P>Besides the openPort, inputSelect() takes an array of 10 bytes (char channels[10]).
+The first five bytes are for analog channels. We want to select channel A without gain, that's the first byte.
+<P>
+<BLOCKQUOTE><CODE>
+<HR>
+<PRE>
+// declare an array of 10 bytes
+char input[10];
+
+// set all elements to zero
+bzero(input, 10);
+
+// select channel A without gain
+input[0] = 1;
+inputSelect(openPort, input);
+</PRE>
+<HR>
+</CODE></BLOCKQUOTE>
+<P>
+<H3>Rate Select</H3>
+
+<P>This function tells the lbb how many times per second to do/send a reading.
+The parameters to this function are somewhat complicated, refer to Appendix A for an explanation.
+<BLOCKQUOTE><CODE>
+<HR>
+<PRE>
+// 50 microseconds
+unsigned long samplePeriod = 50;
+// times samplePeriods
+unsigned long clockPeriod = 1;
+// not sure
+unsigned short pingPeriod = 1;
+// use large buffer
+char smallBuffer = 0;
+
+rateSelect(openPort, samplePeriod, clockPeriod, pingPeriod, smallBuffer);
+</PRE>
+<HR>
+</CODE></BLOCKQUOTE>
+<P>
+<H2><A NAME="ss3.5">3.5 Start Sending Records</A>
+</H2>
+
+<P>Let's tell the lbb to start sending records at the rate we specified.
+<BLOCKQUOTE><CODE>
+<HR>
+<PRE>
+startSampling(openPort);
+</PRE>
+<HR>
+</CODE></BLOCKQUOTE>
+<P>
+<H2><A NAME="ss3.6">3.6 Reading Records</A>
+</H2>
+
+<P>Now that the lbb is sending records we have to read them in a hurry before some buffer overflows and messes everything up:
+<P>When reading a record from the lbb (in one of several ways) you must first read the record type, use readRecordType() for that.
+In our case you will find that we get a clocked sample record.
+<P>A clocked sample record is followed by readings for each selected channel (remember inputSelect()?).
+To get that/those readings use readRecordCS().
+<P>It is very important that you remember which channels you selected and tell readRecordCS() about them properly.
+If you select one channel but try to get readings from two, it might work but you will get your reading so messed up you'll have to reset (or at least restart sampling) to get out of the mess.
+<P>Here's an illustration of what a record looks like:
+<BLOCKQUOTE><CODE>
+<PRE>
+T - record type
+A - channel A reading
+B - channel B reading
+
+TAABB
+</PRE>
+</CODE></BLOCKQUOTE>
+<P>Can you see the potential problem yet? This is what two records look like:
+<BLOCKQUOTE><CODE>
+<PRE>
+TAABBTAABB
+</PRE>
+</CODE></BLOCKQUOTE>
+<P>They are not delimited in any way so if you try to read a 'clocked sample' record with 3 channel readings, you will get 'TAABBTA' which has an unpredictable value and you will not be able to restore order until you restart sampling.
+<P>To ease dealing with this, readRecordCS() takes as a parameter the same array that inputSelect() used.
+This may cause problems if you're not carefull, so just give it some thought.
+<P>We only have channel A selected so our code would look like this:
+<BLOCKQUOTE><CODE>
+<HR>
+<PRE>
+short analog[3]; // analog readings
+unsigned short digital[2]; //digital readings
+
+rc = readRecordType(openPort);
+        
+// read forever
+for(i = 0; 1; i++)
+{
+    // record type one is a 'clocked sample' record
+    if( readRecordType(openPort) == 1 )
+    {
+        if( readRecordCS(openPort, input, analog, digital) > 0 )
+        {
+            printf("channel A reading: %d\n", analog[0]);
+        }
+    }
+}
+</PRE>
+<HR>
+</CODE></BLOCKQUOTE>
+<P>Now that reading is not very obvious. One can hardly imagine the temperature in his room is in between -12.5 and +12.5 degrees.
+It's not but converting raw signals such as those we just read into comprehensible values (degrees, meters) is a different science for each kind of probe and I have no documentation for that. Sorry.
+<P>
+<H2><A NAME="ss3.7">3.7 Sample conversion</A>
+</H2>
+
+<P>Unfortunately you will not get exactly what you want from the lbb and what exactly it sends you is different for every probe.
+Readings are also slightly different when made with or without gain and from different ports.
+Look in the Pasco docs for a couple of confusing tips.
+<P>For temperature, port A without gain we have to do this:
+<BLOCKQUOTE><CODE>
+<HR>
+<PRE>
+analog[0] = (analog[0] * 100) / 3276.7;
+</PRE>
+<HR>
+</CODE></BLOCKQUOTE>
+<H2><A NAME="ss3.8">3.8 Full code</A>
+</H2>
+
+<P>
+<BLOCKQUOTE><CODE>
+<HR>
+<PRE>
+// main.c
+
+#include &lt;stdio.h>
+#include &lt;stdlib.h>
+#include &lt;sw500-l1.h>
+
+int main(void)
+{
+    int rc; // return code from various functions
+    int openPort; // reference to serial port
+    char input[10]; // for inputSelect()
+    unsigned long samplePeriod; // for rateSelect()
+    unsigned long clockPeriod; // for rateSelect()
+    unsigned short pingPeriod; // for rateSelect()
+    char smallBuffer; // for rateSelect()
+    short analog[3]; // analog readings
+    unsigned short digital[2]; //digital readings
+    int count; //counter
+    
+    openPort = initSerial();
+    
+    if(openPort > 0)
+    {
+        printf("connection to serial port established\n");
+    }
+    else
+        return 1;
+    
+    // just in case
+    reset(openPort);
+    
+    printf("Initializing... "); fflush(stdout);
+    // make sure the lbb is in ROM Mode (in case you didn't actually turn it off and back on)
+    if( identify(openPort) == 1 )
+    {
+        if( initialize(openPort) > 0 )
+        {
+            if( execute(openPort) > 0 )
+            {
+                // now the lbb should be in RAM mode, check just in case
+                if( identify(openPort) == 2 )
+                {
+                    printf("now in RAM mode\n");
+                }
+                else
+                    return 1;
+            }
+            else
+                return 1;
+        }
+        else
+            return 1;
+    }
+    else
+        return 1;
+    
+    // set all elements to zero
+    bzero(input, 10);
+    
+    // select channel A without gain
+    input[0] = 1;
+    inputSelect(openPort, input);
+    
+    // 50 microseconds
+    samplePeriod = 50;
+    // times samplePeriods
+    clockPeriod = 1;
+    // not sure
+    pingPeriod = 1;
+    // use large buffer
+    smallBuffer = 0;
+    
+    rc = rateSelect(openPort, samplePeriod, clockPeriod, pingPeriod, smallBuffer);
+    if(rc &lt;= 0)
+        return 1;
+    
+    // read forever
+    for(count = 0; 1; count++)
+    {
+        oneShotSample(openPort);
+        
+        rc = readRecordType(openPort);
+        
+        // record type one is a 'clocked sample' record
+        if(rc == 1)
+        {
+            if( readRecordCS(openPort, input, analog, digital) > 0 )
+            {
+                analog[0] = (analog[0] * 100) / 3276.7;
+                printf("temperature: %d\n", analog[0]);
+            }
+            else 
+                return 1;
+        }
+        // some error
+        else if (rc &lt;= 0)
+            return 1;
+        // different record type
+        else
+        {
+            printf("weird. got the wrong record type\n");
+            return 1;
+        }
+    }
+    
+    return 0;
+}
+</PRE>
+<HR>
+</CODE></BLOCKQUOTE>
+<P>Make sure the library is installed, then compile like this (change path to the library if needed): cc main.c /usr/lib/libsw500-l1.a
+<P>I tested this code, it works.
+<P>
+<HR>
+<A HREF="SW500iProgrammingHowto-4.html">Next</A>
+<A HREF="SW500iProgrammingHowto-2.html">Previous</A>
+<A HREF="SW500iProgrammingHowto.html#toc3">Contents</A>
+</BODY>
+</HTML>

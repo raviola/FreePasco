@@ -1,0 +1,56 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<HTML>
+<HEAD>
+ <META NAME="GENERATOR" CONTENT="SGML-Tools 1.0.9">
+ <TITLE>SW500i Programming Howto: Introduction</TITLE>
+ <LINK HREF="SW500iProgrammingHowto-2.html" REL=next>
+
+ <LINK HREF="SW500iProgrammingHowto.html#toc1" REL=contents>
+</HEAD>
+<BODY>
+<A HREF="SW500iProgrammingHowto-2.html">Next</A>
+Previous
+<A HREF="SW500iProgrammingHowto.html#toc1">Contents</A>
+<HR>
+<H2><A NAME="s1">1. Introduction</A></H2>
+
+<H2><A NAME="ss1.1">1.1 History</A>
+</H2>
+
+<P>Skip this if you don't like fairy tales.
+<P>Once upon a time, in a cold country way up north the board of education decided to buy a load of fancy equipment for highschool students to use in their labs.
+They look like this 
+<A HREF="pasco.jpg">pasco.jpg</A> and are good for measuring temperature, speed, pH, etc. Models SW500i. From now on I will call them lbbs (little black boxes).
+<P>Soon enough teachers knew they would never use those things.
+I'll tell you why: the lbbs were capable of doing amazing things and the software was appropriately complex.
+What PASCO Scientific didn't think of was that people in a high school (students and teachers alike) had no time or desire to do rocket science.
+<P>PASCO wouldn't even consider rewriting their software, instead they suggested buying the newer, even fancier boxes. The techers didn't think that was funny.
+The entire project proved to be a failure.
+<P>So one day some teacher (John Selmys) asked some student (me) whether he wants to write a linux library in C for enabling communication with an lbb.
+Later on applications would be written to use that library.
+The student said ok and started the work.
+<P>In the meantime PASCO Scientific kindly gave us a copy of basic documentation for that model of lbb. Vary basic, but enough to write the access library.
+<P>Of did I forget to mention John and me are both big linux fans? Naturally all the work would be done in and for linux.
+Cross-platform compatibility came to mind a few times but I decided against it.
+Microsoft devtools refuse to compile any of my C/C++ assignments and I don't really care to find out why.
+<P>
+<H2><A NAME="ss1.2">1.2 Intended Audience</A>
+</H2>
+
+<P>This document was written for people interested in creating applications for the SW500i using the sw500-l1 library.
+It has walkthrough of lbb's operation from power up to something usefull, a reference section describing the usage of all functions and explanations for whatever i can explain.
+<P>At the time of writing most capabilities of the lbb have been accounted for in the library.
+The two or three left out are used for data logging away from the lab (the lbb is portable).
+<P>I don't work for PASCO. I am not a programing/EE guru. Many things I don't understand. However, this documents is the best you'll get to guide you with the lbb.
+<P>
+<H2><A NAME="ss1.3">1.3 Contact Information</A>
+</H2>
+
+<P>If you have suggestions for improving this document or find mistakes, please let me know. My current email address is andrew at littlesvr ca.
+<P>
+<HR>
+<A HREF="SW500iProgrammingHowto-2.html">Next</A>
+Previous
+<A HREF="SW500iProgrammingHowto.html#toc1">Contents</A>
+</BODY>
+</HTML>

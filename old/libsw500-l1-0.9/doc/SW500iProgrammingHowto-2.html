@@ -1,0 +1,59 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<HTML>
+<HEAD>
+ <META NAME="GENERATOR" CONTENT="SGML-Tools 1.0.9">
+ <TITLE>SW500i Programming Howto: Installation</TITLE>
+ <LINK HREF="SW500iProgrammingHowto-3.html" REL=next>
+ <LINK HREF="SW500iProgrammingHowto-1.html" REL=previous>
+ <LINK HREF="SW500iProgrammingHowto.html#toc2" REL=contents>
+</HEAD>
+<BODY>
+<A HREF="SW500iProgrammingHowto-3.html">Next</A>
+<A HREF="SW500iProgrammingHowto-1.html">Previous</A>
+<A HREF="SW500iProgrammingHowto.html#toc2">Contents</A>
+<HR>
+<H2><A NAME="s2">2. Installation</A></H2>
+
+<H2><A NAME="ss2.1">2.1 Extract</A>
+</H2>
+
+<P>Extract the archive you downloaded:
+<P>tar -xvjf libsw500-l1-0.9-src.tar.bz
+<P>cd libsw500-l1-0.9/src
+<P>
+<H2><A NAME="ss2.2">2.2 Configure / Compile</A>
+</H2>
+
+<P>Open the Makefile with your favourite text editor.
+You may want to change the install prefix or the serial port or both.
+The files will go in PREFIX/lib and PREFIX/include.
+The serial port /dev/ttyS0 is COM1 under dos and /dev/ttyS1 is COM2.
+<P>After you finished editing the makefile type make. You better hope it compiles.
+<P>
+<H2><A NAME="ss2.3">2.3 Install</A>
+</H2>
+
+<P>If the above step showed no error:
+<P>su<BR>
+'root password'
+<P>Do ls -l /dev/ttyS0 (or S1 if you changed it) and see whether users have read/write permission.
+If not, chmod 666 /dev/ttyS0
+<P>This is necessary to allow regular users to use the lbb (they need permission to write to and read from the port it's connected to). /dev/ttyS0 might be a link to something like /dev/tts/0, the chmod above should work anyway.
+<P>Last step, type
+<P>make install
+<P>If you still got no errors, it should be good for use.
+<P>
+<H2><A NAME="ss2.4">2.4 Troubleshooting</A>
+</H2>
+
+<H3>make: command not found</H3>
+
+<P>I really have seen linux systems without make.
+In SuSE it's in the developement tools section.
+<P>
+<HR>
+<A HREF="SW500iProgrammingHowto-3.html">Next</A>
+<A HREF="SW500iProgrammingHowto-1.html">Previous</A>
+<A HREF="SW500iProgrammingHowto.html#toc2">Contents</A>
+</BODY>
+</HTML>
