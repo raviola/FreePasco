@@ -9,9 +9,12 @@ CMD_EXEC = b'\x03'
 CMD_RESET = b'\x04' 
 
 
+# STAT: initialization working (connection + firmware upload)
+# TODO: implement sampling setup and control
+# TODO: SW500 class docstring
 class SW500():
     def __init__(self,
-                port='/dev/ttyUSB1',    # TODO: hardcoded, put in config file
+                port='/dev/ttyUSB1',    # FIXME: hardcoded, put in config file
                 baudrate=19200,         # Comm parameters fixed by protocol     
                 databits=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
@@ -71,7 +74,7 @@ class SW500():
             if self.mode == "ROM":
                 print ("Loading firmware...")
                 
-                # TODO: hardcoded firmware filename, put in config file
+                # FIXME: hardcoded firmware filename, put in config file
                 with open('freepasco/firmware/sw500ram.s28', 'r') as file:
                     for line in file:
                         if line[0:2] == 'S2':
